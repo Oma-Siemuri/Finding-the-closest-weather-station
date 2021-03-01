@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Feb 28 20:55:16 2021
+
+@author: oma
+"""
+
+# Libraries required to get a weather station data 
+from requests import get # request module handles HTTP calls used to fetch web pages.
+import json # used to read json format files
+from pprint import pprint # used to print the data in an organized/readable layout
+from haversine import haversine # python module for calculating distance between geographic locations
+import matplotlib.pyplot as plt
+from dateutil import parser #dateutil module enables the conversion of date formats
+
+#Assign website urls to a variable
+stations = 'https://apex.oracle.com/pls/apex/raspberrypi/weatherstation/getallstations'
+weather = 'https://apex.oracle.com/pls/apex/raspberrypi/weatherstation/getlatestmeasurements/'
+
+# my_location = (52.194504, 0.134708) # (lat, lon)
+# Point Park Uni = 40.4381621,-80.0037303 # (lat, lon)
+# You can check with any location's latitude and longitude. Remember to change them in the variables below
+
+my_lat = 52.194504
+my_lon = 0.134708
+
+#I assigned all the stations available on the website to a variable called all_stations 
+all_stations = get(stations).json()['items']
+
+
+def find_closest():
+    smallest = 20036
+    for stations in all_stations:
+        station_lon = stations['weather_stn_long']
+        station_lat = stations['weather_stn_lat']
+        distance = haversine((my_lon, my_lat), (station_lon, station_lat))
+        if distance < smallest:
+            smallest = distance
+            closest_station = stations['weather_stn_id']
+    return closest_station
+
+closest_stn = find_closest()
+weather = weather + str(closest_stn)
+
+my_weather = get(weather).json()['items']
+print('Closest Weather station details:')
+print('Closest station ID:' + str(closest_stn))
+pprint(my_weather)
+
+
+
+url = 'https://apex.oracle.com/pls/apex/raspberrypi/weatherstation/getallmeasurements/1261471'
+weather_station = get(url).json()
+#The weather stations from this url take readings every 10mins which results in 4464 readings every month. 
+#JSON data contains 500 records per page which implies that a month's record will be stored in 9 pages approximately. 
+
+pages = 1
+#weather = get(url).json()
+data = weather_station['items']
+
+while 'next' in weather_station and pages < 9:
+    url = weather_station['next']['$ref']
+    print('Fetching {0}'.format(url))
+    weather_stationr = get(url).json()
+    data += weather_station['items']
+    pages += 1
+
+#Plotting a chart to visualize the readings of the temperature sensor
+temperatures = [record['ambient_temp'] for record in data]
+timestamps = [parser.parse(record['reading_timestamp']) for record in data]
+
+plt.plot(timestamps, temperatures)
+plt.ylabel('Air Temperature')
+plt.xlabel('date and time')
+plt.show()
+
